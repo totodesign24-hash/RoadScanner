@@ -6,17 +6,21 @@
 // One key difference: DriveDilSe's own prices don't need browser scraping --
 // they come straight from its public `GET /fleet/` JSON endpoint.
 //
-// IMPORTANT: the Zoomcar/Revv/Myles adapters use placeholder selectors,
-// same caveat as the DriveDilSe smart-pricing scraper -- these are
-// JS-rendered SPAs and the selectors below were written without live
-// browser access to verify them. Run `node scrape.mjs --dry-run --site=<name>`
-// and fix selectors against the live DOM before trusting the scheduled run.
+// Zoomcar adapter uses selectors verified live on 2026-07-12 against
+// https://www.zoomcar.com/pune (see scripts/inspect.mjs, a throwaway
+// devtools-less inspection helper) -- that page lists cars grouped into
+// per-category carousels (SUV / Hatchback / MUV-MPV) with no search
+// interaction needed, so no `/search?` URL (disallowed by robots.txt)
+// is ever touched. Prices there are hourly (`₹NNN/hr`); converted to an
+// approximate daily rate via `HOURLY_TO_DAILY_FACTOR` below since
+// Zoomcar's real per-day rate includes volume discounts this can't see.
 //
-// robots.txt rules honored (checked 2026-07-12, same audit as DriveDilSe's
-// competitor-pricing scraper): Zoomcar disallows `/search?` and other
-// query-param paths (adapter must reach prices via UI navigation, never by
-// loading a disallowed URL); Revv has no disallow rules; Myles disallows
-// only tracking/sort/filter query params and `/search`.
+// Revv and Myles are still unresolved: revv.co.in/self-drive-cars/pune
+// 404s (nav links didn't resolve to a real per-city listing URL in
+// testing) and myles.com has a broken TLS certificate (cert error on
+// both myles.com and www.myles.com as of 2026-07-12) -- possibly a
+// stale/wrong domain. Both need a human to find the correct working
+// URL before an adapter can be written for them.
 
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
@@ -27,7 +31,8 @@ const SITE_FILTER = process.argv.find((a) => a.startsWith("--site="))?.split("="
 const CITY = "Pune";
 const CATEGORIES = ["Hatchback", "Sedan", "SUV", "MPV"];
 const REQUEST_DELAY_MS = 4000;
-const USER_AGENT = "RideCompareBot/1.0 (+https://ridecompare.example; price comparison, respects robots.txt)";
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+const HOURLY_TO_DAILY_FACTOR = 20; // approximation: real day-rates undercut hourly*24 via volume discount
 
 const DRIVEDILSE_API = "https://fuesnifgaiivcapppexw.supabase.co/functions/v1";
 
@@ -44,32 +49,71 @@ function parsePrice(text) {
 // Browser-based adapters take (page); the DriveDilSe adapter needs no
 // browser at all since it's a plain JSON API.
 
+// Zoomcar's category carousel headings don't exactly match our category
+// names -- map their heading text (substring match) to ours.
+const ZOOMCAR_CATEGORY_MAP = [
+  ["SUV", "SUV"],
+  ["MUV/MPV", "MPV"],
+  ["Hatchback", "Hatchback"],
+  ["Sedan", "Sedan"],
+];
+
 const browserAdapters = {
   zoomcar: async (page) => {
-    await page.goto("https://www.zoomcar.com/", { waitUntil: "domcontentloaded" });
-    // PLACEHOLDER SELECTORS -- verify against the live site:
-    // for (const category of CATEGORIES) {
-    //   await page.fill('[data-testid="city-input"]', CITY);
-    //   await page.click(`[data-testid="category-filter-${category.toLowerCase()}"]`);
-    //   const cards = await page.$$('[data-testid="car-price"]');
-    //   ...
-    // }
-    return [];
+    await page.goto(`https://www.zoomcar.com/${CITY.toLowerCase()}`, {
+      waitUntil: "networkidle",
+      timeout: 30000,
+    });
+    await page.waitForTimeout(2000);
+
+    const raw = await page.evaluate(() => {
+      const heads = Array.from(document.querySelectorAll("h2.home-carousel-new-header-text"));
+      const out = [];
+      for (const h of heads) {
+        let node = h;
+        let cards = [];
+        for (let i = 0; i < 6 && node; i++) {
+          node = node.parentElement;
+          if (!node) break;
+          const found = node.querySelectorAll(".car-card");
+          if (found.length > 0) {
+            cards = Array.from(found);
+            break;
+          }
+        }
+        for (const card of cards) {
+          const name = card.querySelector(".car-name")?.textContent.trim() || null;
+          const priceText = card.querySelector(".price-current")?.textContent.trim() || "";
+          out.push({ heading: h.textContent.trim(), name, priceText });
+        }
+      }
+      return out;
+    });
+
+    const rows = [];
+    for (const r of raw) {
+      const category = ZOOMCAR_CATEGORY_MAP.find(([label]) => r.heading.includes(label))?.[1];
+      const hourly = parsePrice(r.priceText);
+      if (!category || !hourly) continue;
+      rows.push({ category, price_per_day: Math.round(hourly * HOURLY_TO_DAILY_FACTOR), car_name: r.name });
+    }
+    return rows;
   },
 
+  // Unresolved -- see header comment. revv.co.in/self-drive-cars/<city>
+  // 404s; needs the real per-city listing URL.
   revv: async (page) => {
     await page.goto(`https://www.revv.co.in/self-drive-cars/${CITY.toLowerCase()}`, {
       waitUntil: "domcontentloaded",
     });
-    // PLACEHOLDER SELECTORS -- verify against the live site.
     return [];
   },
 
+  // Unresolved -- see header comment. myles.com has a broken TLS cert.
   myles: async (page) => {
     await page.goto(`https://myles.com/self-drive-cars-${CITY.toLowerCase()}`, {
       waitUntil: "domcontentloaded",
     });
-    // PLACEHOLDER SELECTORS -- verify against the live site.
     return [];
   },
 };
