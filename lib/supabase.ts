@@ -26,7 +26,10 @@ export const PROVIDER_LINKS: Record<string, string> = {
   drivedilse: "https://drivedilse.com/cars",
   zoomcar: "https://www.zoomcar.com/",
   revv: "https://www.revv.co.in/",
-  myles: "https://myles.com/",
+  // myles.com is dead/wrong (TLS cert for an unrelated domain); real site
+  // is mylescars.com. Kept for reference even though Myles has no Pune
+  // self-drive listings right now -- see scripts/seed-demo-data.mjs.
+  myles: "https://www.mylescars.com/",
 };
 
 export const PROVIDER_LABELS: Record<string, string> = {

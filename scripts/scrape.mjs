@@ -15,12 +15,21 @@
 // approximate daily rate via `HOURLY_TO_DAILY_FACTOR` below since
 // Zoomcar's real per-day rate includes volume discounts this can't see.
 //
-// Revv and Myles are still unresolved: revv.co.in/self-drive-cars/pune
-// 404s (nav links didn't resolve to a real per-city listing URL in
-// testing) and myles.com has a broken TLS certificate (cert error on
-// both myles.com and www.myles.com as of 2026-07-12) -- possibly a
-// stale/wrong domain. Both need a human to find the correct working
-// URL before an adapter can be written for them.
+// Myles: myles.com is dead (TLS cert for an unrelated domain --
+// realnames.com -- confirmed via openssl s_client, so it's not "briefly
+// down," the domain itself is wrong/parked). Real site is mylescars.com.
+// But per mylescars.com's own city list, Pune is under "Subscription
+// Cities" only, NOT "Self-drive cities" (Delhi, Mumbai, Bengaluru,
+// Amritsar, Chandigarh, Goa, Vellore) -- Myles genuinely has no self-drive
+// product in Pune, so there's nothing to scrape here until that changes.
+// No Myles adapter is written; see scripts/seed-demo-data.mjs for how
+// Pune results handle Myles's absence.
+//
+// Revv is still unresolved: revv.co.in/self-drive-cars/pune 404s, and
+// their homepage links to a "Car Rental in Pune" page via client-side
+// routing that wasn't successfully traced to a real URL in testing.
+// Unlike Myles there's no evidence Revv excludes Pune -- needs a human
+// to find the correct working URL before a real adapter can be written.
 
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
@@ -71,6 +80,29 @@ const browserAdapters = {
     });
     await page.waitForTimeout(2000);
 
+    // Category carousels (SUV / Hatchback / MUV-MPV / Sedan) lazy-load as
+    // they scroll into view -- without this, only carousels already
+    // visible at initial viewport height (usually just the first one)
+    // get populated, and the rest silently return zero cards. Scroll to
+    // the bottom in steps so every carousel has a chance to render.
+    await page.evaluate(async () => {
+      const step = 800;
+      const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+      let last = -1;
+      while (document.body.scrollHeight !== last) {
+        last = document.body.scrollHeight;
+        window.scrollTo(0, document.body.scrollHeight);
+        await delay(400);
+      }
+      for (let y = 0; y < document.body.scrollHeight; y += step) {
+        window.scrollTo(0, y);
+        await delay(300);
+      }
+      window.scrollTo(0, document.body.scrollHeight);
+      await delay(500);
+    });
+    await page.waitForTimeout(2500);
+
     const raw = await page.evaluate(() => {
       const heads = Array.from(document.querySelectorAll("h2.home-carousel-new-header-text"));
       const out = [];
@@ -114,13 +146,11 @@ const browserAdapters = {
     return [];
   },
 
-  // Unresolved -- see header comment. myles.com has a broken TLS cert.
-  myles: async (page) => {
-    await page.goto(`https://myles.com/self-drive-cars-${CITY.toLowerCase()}`, {
-      waitUntil: "domcontentloaded",
-    });
-    return [];
-  },
+  // No Myles adapter: their real site (mylescars.com) doesn't offer
+  // self-drive rental in Pune at all -- see header comment. Nothing to
+  // scrape here; if Myles later adds Pune self-drive coverage, write an
+  // adapter targeting mylescars.com (not myles.com, which is a dead
+  // domain) and update lib/supabase.ts's PROVIDER_LINKS.
 };
 
 // DriveDilSe's own categories are finer-grained ("Compact Hatchback",

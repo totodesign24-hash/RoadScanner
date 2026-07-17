@@ -1,13 +1,20 @@
-// Seeds clearly-fictional placeholder listings for Revv and Myles --
-// their real scrapers aren't working yet (see scrape.mjs header comment:
-// revv.co.in/self-drive-cars/pune 404s, myles.com has a broken TLS cert).
-// Every row here is marked is_demo=true so the UI can label it honestly
-// instead of presenting invented numbers as real scraped prices.
+// Seeds clearly-fictional placeholder listings for Revv only.
 //
-// Once a real adapter is written for a provider, scrape.mjs's own
-// delete-then-insert cycle will replace these fictional rows with real
-// ones automatically the next time it runs successfully for that
-// provider -- this script never needs to be re-run or cleaned up by hand.
+// Myles is deliberately NOT seeded here: their real site (mylescars.com --
+// myles.com is a dead/wrong domain, redirects to unrelated infra) lists
+// Pune under "Subscription Cities" but NOT under "Self-drive cities"
+// (Delhi, Mumbai, Bengaluru, Amritsar, Chandigarh, Goa, Vellore). Myles
+// genuinely does not offer self-drive rental in Pune -- inventing prices
+// for a service that doesn't exist there would be more misleading than
+// having no data, so Myles is simply absent from Pune results until/unless
+// that changes.
+//
+// Revv's real per-city listing URL wasn't found in the time available
+// (revv.co.in/self-drive-cars/pune 404s; their homepage links to a "Car
+// Rental in Pune" page via client-side routing that wasn't successfully
+// traced) -- unlike Myles, there's no evidence Revv excludes Pune, so it's
+// still marked is_demo=true pending someone finding the real URL, rather
+// than dropped like Myles.
 //
 // Prices are hand-picked to sit in the same plausible range as the real
 // Zoomcar/DriveDilSe data already in `listings` (roughly ₹1500-4000/day
@@ -17,26 +24,20 @@ import { createClient } from "@supabase/supabase-js";
 const CITY = "Pune";
 
 const DEMO_LISTINGS = [
-  // Revv -- fictional
+  // Revv -- fictional, pending real URL discovery
   { provider: "revv", category: "Hatchback", price_per_day: 1750, car_name: "Maruti Swift (demo)" },
   { provider: "revv", category: "Hatchback", price_per_day: 1980, car_name: "Hyundai Grand i10 (demo)" },
   { provider: "revv", category: "Sedan", price_per_day: 2600, car_name: "Honda City (demo)" },
   { provider: "revv", category: "SUV", price_per_day: 3400, car_name: "Hyundai Creta (demo)" },
   { provider: "revv", category: "SUV", price_per_day: 4100, car_name: "Mahindra XUV500 (demo)" },
   { provider: "revv", category: "MPV", price_per_day: 3050, car_name: "Maruti Ertiga (demo)" },
-
-  // Myles -- fictional
-  { provider: "myles", category: "Hatchback", price_per_day: 1690, car_name: "Tata Tiago (demo)" },
-  { provider: "myles", category: "Hatchback", price_per_day: 2100, car_name: "Maruti Baleno (demo)" },
-  { provider: "myles", category: "Sedan", price_per_day: 2750, car_name: "Skoda Slavia (demo)" },
-  { provider: "myles", category: "SUV", price_per_day: 3600, car_name: "Kia Seltos (demo)" },
-  { provider: "myles", category: "SUV", price_per_day: 5200, car_name: "Mahindra Scorpio-N (demo)" },
-  { provider: "myles", category: "MPV", price_per_day: 3200, car_name: "Toyota Innova Crysta (demo)" },
 ];
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const providers = [...new Set(DEMO_LISTINGS.map((r) => r.provider))];
+// Also removes any previously-seeded Myles rows -- see comment above on
+// why Myles is no longer seeded for Pune.
+const providers = [...new Set(DEMO_LISTINGS.map((r) => r.provider)), "myles"];
 const { error: delErr } = await sb.from("listings").delete().in("provider", providers).eq("city", CITY);
 if (delErr) throw delErr;
 
