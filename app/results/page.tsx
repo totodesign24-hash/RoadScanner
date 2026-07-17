@@ -77,6 +77,12 @@ export default async function ResultsPage({
           </div>
         )}
 
+        {listings.some((l) => l.is_demo) && (
+          <div style={demoNoticeStyle}>
+            Rows marked <strong>ESTIMATED</strong> are placeholder figures, not live scraped prices — that provider's scraper isn't wired up yet.
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
           <aside style={sidebarStyle}>
             <div style={sidebarTitleStyle}>Providers included</div>
@@ -107,6 +113,7 @@ export default async function ResultsPage({
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontWeight: 700, color: theme.text }}>{PROVIDER_LABELS[l.provider] || l.provider}</span>
                     {l.id === cheapest?.id && <span style={cheapestBadgeStyle}>CHEAPEST</span>}
+                    {l.is_demo && <span style={demoBadgeStyle}>ESTIMATED</span>}
                   </div>
                   {l.car_name && <div style={{ fontSize: ".82rem", color: theme.textMuted, marginTop: 2 }}>{l.car_name}</div>}
                   <div style={{ fontSize: ".72rem", color: "#a4afc1", marginTop: 4 }}>Updated {timeAgo(l.scraped_at)}</div>
@@ -209,6 +216,16 @@ const cheapestBadgeStyle: React.CSSProperties = {
   letterSpacing: ".03em",
 };
 
+const demoBadgeStyle: React.CSSProperties = {
+  fontSize: ".65rem",
+  fontWeight: 800,
+  color: "#946200",
+  background: "#fff3d6",
+  padding: "2px 8px",
+  borderRadius: 20,
+  letterSpacing: ".03em",
+};
+
 const selectBtnStyle: React.CSSProperties = {
   marginTop: 6,
   fontSize: ".78rem",
@@ -223,4 +240,14 @@ const emptyStateStyle: React.CSSProperties = {
   padding: 32,
   textAlign: "center",
   color: theme.textMuted,
+};
+
+const demoNoticeStyle: React.CSSProperties = {
+  background: "#fff8e8",
+  border: "1px solid #f5deA0",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontSize: ".8rem",
+  color: "#8a6100",
+  marginBottom: 16,
 };

@@ -16,6 +16,7 @@ export type Listing = {
   price_per_day: number;
   car_name: string | null;
   scraped_at: string;
+  is_demo: boolean;
 };
 
 export const CATEGORIES = ["Hatchback", "Sedan", "SUV", "MPV"] as const;
