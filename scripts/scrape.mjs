@@ -35,6 +35,11 @@ const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const HOURLY_TO_DAILY_FACTOR = 20; // approximation: real day-rates undercut hourly*24 via volume discount
 
 const DRIVEDILSE_API = "https://fuesnifgaiivcapppexw.supabase.co/functions/v1";
+// DriveDilSe's public anon key -- same one embedded in drivedilse.com's
+// own page source (index.html), required by Supabase Edge Functions as
+// an `Authorization` header even for endpoints meant to be public.
+const DRIVEDILSE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1ZXNuaWZnYWlpdmNhcHBwZXh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2ODgzMDksImV4cCI6MjA5NTI2NDMwOX0.R4UjqPMiXqdAunW-cECs5i2yap8lr9TJH8ocOjCYMic";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -118,13 +123,27 @@ const browserAdapters = {
   },
 };
 
+// DriveDilSe's own categories are finer-grained ("Compact Hatchback",
+// "Compact SUV") than the 4 buckets this site searches by -- normalize
+// so those cars actually show up in results instead of silently
+// vanishing from every search.
+function normalizeCategory(category) {
+  if (/hatchback/i.test(category)) return "Hatchback";
+  if (/suv/i.test(category)) return "SUV";
+  if (/sedan/i.test(category)) return "Sedan";
+  if (/mpv|muv/i.test(category)) return "MPV";
+  return category;
+}
+
 async function scrapeDrivedilse() {
-  const res = await fetch(`${DRIVEDILSE_API}/fleet/`);
+  const res = await fetch(`${DRIVEDILSE_API}/fleet/`, {
+    headers: { Authorization: `Bearer ${DRIVEDILSE_ANON_KEY}` },
+  });
   if (!res.ok) throw new Error(`DriveDilSe fleet fetch failed: ${res.status}`);
   const cars = await res.json();
   return cars
     .filter((c) => c.active !== false)
-    .map((c) => ({ category: c.category, price_per_day: c.pricePerDay, car_name: c.name }));
+    .map((c) => ({ category: normalizeCategory(c.category), price_per_day: c.pricePerDay, car_name: c.name }));
 }
 
 async function scrapeBrowserProvider(browser, name, adapter) {
