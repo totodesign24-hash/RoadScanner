@@ -1,6 +1,14 @@
 import { supabase, Listing, PROVIDER_LABELS, PROVIDER_LINKS, CATEGORIES } from "../../lib/supabase";
 import { theme } from "../../lib/theme";
 
+// Next.js patches global fetch (which supabase-js uses under the hood) to
+// cache indefinitely by default in Server Components. Prices change every
+// scraper run, so that cache must be disabled -- otherwise this page keeps
+// serving whatever it first fetched (including an empty result from before
+// `listings` had any rows) forever.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function timeAgo(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 60) return `${mins}m ago`;
